@@ -17,10 +17,10 @@
 | Couche           | Responsabilité | Exclu |
 |------------------|----------------|-------|
 | `domain`         | Types et invariants juridiques : sources, textes, dispositions, versions, périodes de validité, provenance, consultation à une date. | Entrées-sorties, SQL, processus, variables d'environnement, horloge système. |
-| `corpus`         | Corpus officiel en lecture seule : instantané immuable des dispositions et de la provenance de leur source. | Toute écriture, règles juridiques, simulation. |
+| `corpus`         | Corpus officiel en lecture seule : instantané immuable des dispositions et de la provenance de leur source ; lecture des documents LEGI déjà extraits (XML), sans entrée-sortie. | Toute écriture, entrées-sorties, règles juridiques, simulation. |
 | `simulation`     | Scénarios synthétiques et éphémères : faits datés et leur statut (D7). | Accès au corpus, persistance, données réelles. |
 | `execution`      | Environnement de l'orchestrateur : outils fermés en lecture seule, exécuteur borné par une liste d'autorisation, provenance et trace ; skills déclarés. | Entrées-sorties, horloge, réseau, code dynamique, écriture du corpus. |
-| `infrastructure` | Exécution de `sqlite3`, définition canonique du schéma, contrôle de conformité, sauvegardes, fichiers ; conversion entre lignes SQL et types du domaine. | Règles juridiques, présentation, chemins par défaut. |
+| `infrastructure` | Programmes du système et fichiers : lecture de l'archive LEGI par `tar` et `shasum` ; exécution de `sqlite3`, définition canonique du schéma, contrôle de conformité, sauvegardes ; conversion entre lignes SQL et types du domaine. | Règles juridiques, présentation, chemins par défaut, écriture dans le corpus. |
 | `cli`            | Lecture des arguments, choix de la commande, résolution des chemins par défaut, formatage des sorties, conversion des erreurs. | SQL, règles juridiques. |
 | `main.rs`        | Appel de la CLI, écriture de l'erreur, code de retour. | Toute autre logique. |
 
@@ -75,16 +75,22 @@ src/domain/legi.rs                 conventions LEGI : identifiants,
 src/domain/provision.rs            versions, résolution à une date
 src/domain/anomaly.rs              anomalies temporelles
 src/corpus/mod.rs                  corpus en lecture seule, provenance
+src/corpus/legi_xml.rs             lecteur XML dédié aux articles LEGI
+src/corpus/legi_text.rs            corpus d'un texte à partir de ses
+                                   documents d'article
 src/simulation.rs                  scénarios synthétiques, faits datés
 src/execution/mod.rs
 src/execution/tool.rs              contrat des outils, exécuteur, trace
 src/execution/skill.rs             format des skills, premier skill
 src/infrastructure/mod.rs
+src/infrastructure/legi_archive.rs lecture de l'archive LEGI (tar),
+                                   empreintes (shasum), provenance
 src/infrastructure/sqlite.rs       point unique d'exécution de sqlite3
 src/infrastructure/schema.rs       définition canonique du schéma,
                                    initialisation, contrôle de conformité
 src/infrastructure/backup.rs       sauvegardes cohérentes
 tests/common/mod.rs                fixtures partagées des tests
+tests/common/legi_extracts.rs      extraits LEGI authentiques
 tests/<capacité>.rs                tests d'intégration
 ```
 
@@ -120,6 +126,7 @@ Les noms Rust non encore introduits sont réservés à ces notions.
 | Fait daté et son statut   | `DatedFact`, `FactStatus` | aucun : éphémère     |
 | Outil, exécuteur          | `ToolKind`, `Executor` | aucun                   |
 | Skill juridique           | `Skill`            | aucun                       |
+| Extrait d'un texte LEGI   | `TextExtract`      | aucun : en mémoire          |
 
 Le moteur distingue :
 
@@ -160,6 +167,14 @@ l'archive `Freemium_legi_global_20261108-140000`, mesurés en flux le
   périodes inversées sont signalées comme anomalies ;
 - sur 263 996 listes `VERSIONS` distinctes, 7 638 présentent une
   lacune et 1 562 un chevauchement.
+
+Code civil (`LEGITEXT000006070721`), même archive, lu par le moteur le
+2026-11-13 : 6 395 documents d'article, 3 540 dispositions, chaque
+version citée dotée de son document ; XML homogène (UTF-8, une
+déclaration par document, ni DOCTYPE, ni CDATA, ni commentaire ; seule
+entité rencontrée : `&#13;`) ; 37 périodes inversées, 1 période vide
+marquée `VIGUEUR` (conflit d'état), 22 dispositions à chevauchement,
+116 lacunes, aucun état absent.
 
 Une période de validité est un intervalle semi-ouvert : la date de
 début est incluse, la date de fin exclue. `temporal.rs` et les
@@ -221,6 +236,16 @@ substitue jamais la date de reconstruction.
   restent visibles dans le résultat final ; aucune hypothèse ne
   devient certitude par accumulation de raisonnements. Il ne se
   substitue pas à une juridiction.
+- **D10 — Archive LEGI lue par `tar` et `shasum` du système.**
+  Arrêtée le 2026-11-13. Dans la logique de D2, aucune dépendance
+  Cargo : `tar` (bsdtar 3.5.3 constaté, option `--include`) extrait
+  vers sa sortie standard, sans écriture sur disque ; `shasum -a 256`
+  vérifie l'empreinte enregistrée avant toute lecture ; un lecteur XML
+  dédié, sans entrée-sortie, ne couvre que les constructions constatées
+  dans l'archive et refuse les autres. Conséquences : chaque lecture
+  parcourt l'archive entière (environ une minute) ; GNU tar, qui
+  ignore `--include`, n'est pas pris en charge ; tout document
+  divergent arrête la lecture.
 
 ## 7. Écarts constatés le 2026-11-13
 

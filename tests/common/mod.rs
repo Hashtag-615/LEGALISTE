@@ -9,6 +9,8 @@
 // n'en utilise qu'une partie.
 #![allow(dead_code)]
 
+pub mod legi_extracts;
+
 use legaliste::corpus::{Corpus, SourceRecord};
 use legaliste::domain::legi::{self, LegiId, LegiStatus};
 use legaliste::domain::provision::{Provision, ProvisionVersion};
@@ -67,6 +69,12 @@ pub const ARCHIVE: &str = "Freemium_legi_global_20261108-140000.tar.gz";
 pub const ARCHIVE_SHA256: &str = "90c9dc4a0a362943eef055881f00a727ac5d5f08fb9b4ec472e9da6da572bda2";
 pub const SOURCE_DATE: &str = "2026-11-08";
 pub const ACQUISITION_DATE: &str = "2026-11-13";
+
+/// Dossier du Code civil dans l'archive (CID du texte).
+pub const CODE_CIVIL: &str = "LEGITEXT000006070721";
+
+/// Article réel d'un autre texte, absent de tout corpus du Code civil.
+pub const FOREIGN_ARTICLE: &str = "LEGIARTI000006850357";
 
 pub fn date(text: &str) -> CivilDate {
     text.parse().unwrap()

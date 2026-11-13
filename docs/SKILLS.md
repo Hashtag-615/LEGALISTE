@@ -38,7 +38,9 @@ et sa procédure une fonction Rust relue et testée.
 
 Déclaration : `TEMPORAL_RESOLUTION` ; exécution :
 `resolve_temporally` (`src/execution/skill.rs`) ; tests :
-`tests/execution.rs`.
+`tests/execution.rs`, `tests/legi_extracts.rs` (documents
+authentiques) et `tests/legi_archive.rs` (Code civil lu dans
+l'archive de référence).
 
 Il identifie, selon la source consultée, la version d'une disposition
 en vigueur à la date d'une situation. Outils : état du corpus,

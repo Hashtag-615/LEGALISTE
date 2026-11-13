@@ -145,8 +145,10 @@ n'est jamais fractionné dans le seul but de passer sous un seuil.
   d'échec vérifie la cause de l'échec, pas seulement sa survenance.
 - Aucun test n'est désactivé (`#[ignore]`) ni affaibli pour masquer
   une défaillance.
-- L'absence de `sqlite3` fait échouer les tests concernés ; elle ne
-  les fait jamais passer silencieusement.
+- L'absence de `sqlite3`, de `tar`, de `shasum` ou de l'archive LEGI
+  de référence fait échouer les tests concernés ; elle ne les fait
+  jamais passer silencieusement. Le parcours réel de l'archive
+  (`tests/legi_archive.rs`) dure environ une minute.
 
 ## 9. Qualité Rust
 

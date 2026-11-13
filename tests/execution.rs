@@ -3,16 +3,13 @@
 
 mod common;
 
-use common::{ARCHIVE_SHA256, ARTICLE_16_11, corpus, date, id};
+use common::{ARCHIVE_SHA256, ARTICLE_16_11, FOREIGN_ARTICLE, corpus, date, id};
 use legaliste::domain::anomaly::TemporalAnomaly;
 use legaliste::execution::skill::{self, Reservation, TEMPORAL_RESOLUTION};
 use legaliste::execution::tool::{
     AnomalyOutcome, Executor, ResolutionOutcome, ToolError, ToolKind, ToolRequest,
 };
 use legaliste::simulation::{DatedFact, FactStatus, Scenario};
-
-/// Article d'un autre texte, réel mais absent du corpus réduit.
-const ABSENT_ARTICLE: &str = "LEGIARTI000006850357";
 
 fn scenario(provision: &str, situation_date: &str, status: FactStatus) -> Scenario {
     let fact = DatedFact::new("Situation synthétique", date(situation_date), status).unwrap();
@@ -27,7 +24,7 @@ fn simulation_cannot_modify_the_corpus() {
     for (provision, situation_date) in [
         ("LEGIARTI000006419309", "2010-06-15"),
         ("LEGIARTI000006419309", "2006-01-01"),
-        (ABSENT_ARTICLE, "2010-06-15"),
+        (FOREIGN_ARTICLE, "2010-06-15"),
     ] {
         let scenario = scenario(provision, situation_date, FactStatus::Hypothetical);
         skill::resolve_temporally(&scenario, &corpus).unwrap();
@@ -84,7 +81,7 @@ fn documentary_absence_is_not_absence_of_norm() {
     let corpus = corpus(ARTICLE_16_11);
 
     let absent = skill::resolve_temporally(
-        &scenario(ABSENT_ARTICLE, "2010-06-15", FactStatus::Established),
+        &scenario(FOREIGN_ARTICLE, "2010-06-15", FactStatus::Established),
         &corpus,
     )
     .unwrap();
@@ -179,7 +176,7 @@ fn anomaly_tool_distinguishes_absence_from_clean_result() {
     let corpus = corpus(ARTICLE_16_11);
     let mut executor = Executor::new(&corpus, TEMPORAL_RESOLUTION.allowed_tools);
 
-    let absent = executor.detect_anomalies(id(ABSENT_ARTICLE)).unwrap();
+    let absent = executor.detect_anomalies(id(FOREIGN_ARTICLE)).unwrap();
     assert_eq!(absent.result(), &AnomalyOutcome::NotInCorpus);
     assert!(absent.provenance().versions_read().is_empty());
 }

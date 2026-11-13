@@ -1,6 +1,12 @@
 //! Corpus juridique officiel : instantané immuable d'une source, avec
 //! sa provenance. Aucune méthode ne le modifie après construction ;
 //! outils et simulations n'en reçoivent qu'une référence partagée.
+//!
+//! `legi_xml` et `legi_text` lisent les documents LEGI déjà extraits,
+//! sans entrée-sortie ; l'accès à l'archive relève d'`infrastructure`.
+
+pub mod legi_text;
+pub mod legi_xml;
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -102,6 +108,11 @@ impl Corpus {
 
     pub fn source(&self) -> &SourceRecord {
         &self.source
+    }
+
+    /// Dispositions, par plus petit identifiant de version.
+    pub fn provisions(&self) -> &[Provision] {
+        &self.provisions
     }
 
     /// Disposition désignée par l'un quelconque de ses identifiants de

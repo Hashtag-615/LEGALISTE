@@ -64,6 +64,13 @@ n'y est consigné, y compris dans ce document.
   base persistante.
 - Données de test fictives ; aucun extrait de pièce réelle non
   publique.
+- Extraits LEGI authentiques admis : documents publics reproduits
+  octet pour octet dans `tests/common/legi_extracts.rs`, avec chemin
+  dans l'archive, empreinte vérifiée et mentions de la Licence
+  Ouverte.
+- `tests/legi_archive.rs` lit l'archive de référence en lecture seule,
+  sans rien écrire sur disque, et vérifie qu'elle reste inchangée ;
+  son absence fait échouer ces tests.
 
 ## 6. Frontières d'exécution
 

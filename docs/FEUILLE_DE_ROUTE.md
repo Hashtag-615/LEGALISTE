@@ -28,7 +28,7 @@ restitue exactement les mêmes dispositions, références et anomalies.
 |-----------|---------|------|
 | 1.1 | Noyau temporel du domaine : dates civiles, identifiants et statuts LEGI, versions de dispositions, résolution à une date, détection des lacunes, chevauchements, périodes inversées et incohérences de statut. | Réalisé |
 | 1.2 | Définition canonique du schéma SQLite, contrôle de conformité, `db init`, consultation en lecture seule. | À faire |
-| 1.3 | Lecture de l'archive LEGI en flux, sans extraction sur disque ; registre des sources (nom, date d'état, SHA-256). | Décision préalable requise (§ 3) |
+| 1.3 | Lecture de l'archive LEGI en flux, sans extraction sur disque ; provenance vérifiée (nom, date d'état, SHA-256). | Réalisé pour un texte à la fois (Code civil éprouvé, D10) ; registre des sources à lire depuis le manifeste |
 | 1.4 | Import reproductible : base temporaire d'abord ; base persistante sur mandat explicite ; traçabilité des acquisitions. | À faire |
 | 1.5 | Consultation : dispositions applicables à une date, selon l'état de la source, avec références et anomalies ; test de reproductibilité. | À faire |
 
@@ -70,10 +70,8 @@ d'une norme dans le corpus ne prouve pas son absence en droit.
 
 ## 3. Décisions ouvertes
 
-- Lecture de l'archive LEGI : programme `tar` du système, dans la
-  logique de D2, ou dépendance Rust soumise à autorisation.
-- Analyse du XML LEGI : extracteur dédié sans dépendance, ou
-  bibliothèque soumise à autorisation.
+- Coût de lecture : chaque accès parcourt l'archive entière (environ
+  une minute) ; un index ou la base SQLite (1.2) devra l'éviter.
 - Identité durable d'une disposition LEGI : aucun identifiant commun
   aux versions d'un article n'a été constaté ; la liste `VERSIONS`
   de chaque article en tient lieu.
