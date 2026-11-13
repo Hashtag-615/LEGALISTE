@@ -10,7 +10,10 @@ Documents associés, dont les règles ne sont pas répétées ici :
 - `AGENTS.md` : doctrine juridique, confidentialité, discipline des agents ;
 - `CLAUDE.md` : discipline opérationnelle de Claude Code, y compris Git ;
 - `docs/ARCHITECTURE.md` : couches, sens des dépendances, carte des modules ;
-- `docs/DATA_BOUNDARIES.md` : zones de données et publication.
+- `docs/DATA_BOUNDARIES.md` : zones de données, frontières
+  d'exécution et publication ;
+- `docs/SKILLS.md` : format et inventaire des skills juridiques ;
+- `docs/FEUILLE_DE_ROUTE.md` : étapes et décisions ouvertes.
 
 ## 2. Points d'entrée
 
@@ -28,13 +31,16 @@ ne doit être placée dans `main.rs`.
   variables ; `CamelCase` pour types et traits ;
   `SCREAMING_SNAKE_CASE` pour constantes.
 - Identifiants en anglais ; messages opérateur, commentaires et
-  documentation en français.
+  documentation en français. Les valeurs d'un vocabulaire officiel
+  (par exemple les états LEGI) gardent leur forme d'origine, sans
+  traduction qui en requalifierait le sens.
 - Le vocabulaire juridique suit le glossaire de
   `docs/ARCHITECTURE.md` ; une notion porte le même nom en Rust
   et en SQL.
 - Chaque date est nommée d'après sa nature : publication, entrée en
-  vigueur, fin de vigueur, acquisition, rectification. Aucun champ
-  générique `date`.
+  vigueur, fin de vigueur, état de la source, acquisition,
+  rectification, référence (date de la situation examinée). Aucun
+  champ générique `date`.
 - Noms de module proscrits : `utils`, `helpers`, `misc`, `manager`,
   `common` (sauf `tests/common/`).
 - Noms de fichier proscrits : ceux contenant `token`, `secret` ou

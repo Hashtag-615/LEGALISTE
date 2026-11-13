@@ -18,6 +18,7 @@ n'y est consigné, y compris dans ce document.
 | Corpus public           | Textes officiels acquis, dans leur forme d'origine. | Hors dépôt ; `sources_publiques/` pour les seules pièces dont la publication est vérifiée. | Non, sauf publication vérifiée. | Lecture seule. |
 | Base persistante        | Base SQLite opérationnelle et ses sauvegardes. | Répertoire de données hors dépôt (constante `DATA_DIR`). | Jamais. | Écriture par les seules commandes qui la modifient explicitement ; lecture seule pour toute consultation. |
 | Données confidentielles | Coffre chiffré, pièces, dossiers, correspondances, données personnelles. | Hors dépôt. | Jamais. | Aucun. |
+| Scénarios synthétiques  | Acteurs, faits et pièces fictifs servant à éprouver le raisonnement. | Tests ; mémoire du programme le temps d'une exécution. | Seulement comme fixtures de test fictives. | Lecture ; jamais enregistrés dans la base persistante. |
 | Artefacts               | Compilation, bases de test temporaires. | Répertoire cible configuré localement ; répertoire temporaire du système. | Jamais. | Écriture. |
 
 ## 3. Base persistante
@@ -48,6 +49,9 @@ n'y est consigné, y compris dans ce document.
 - Aucun module, test, script ou document du dépôt ne lit, n'écrit
   ni ne référence le coffre chiffré ou des données confidentielles.
 - Aucune donnée confidentielle n'est importée dans la base SQLite.
+- Les dossiers réels n'entrent dans aucun traitement du code tant
+  que le stockage séparé prévu par la décision D7
+  (`docs/ARCHITECTURE.md`) n'a pas été arrêté.
 
 ## 5. Tests
 
@@ -61,13 +65,27 @@ n'y est consigné, y compris dans ce document.
 - Données de test fictives ; aucun extrait de pièce réelle non
   publique.
 
-## 6. Publication Git
+## 6. Frontières d'exécution
+
+| Frontière            | Module       | Règle |
+|----------------------|--------------|-------|
+| Corpus officiel      | `corpus`     | Instantané immuable, construit une fois avec la provenance de sa source ; aucune méthode de modification ; consulté par référence partagée. |
+| Espace de simulation | `simulation` | Scénarios synthétiques et éphémères ; jamais enregistrés ; aucun accès direct au corpus. |
+| Exécution isolée     | `execution`  | Outils fermés, en lecture seule, sans entrée-sortie, réseau, horloge ni code dynamique ; liste d'autorisation par skill ; provenance et trace de chaque appel. |
+
+- Une simulation n'atteint le corpus qu'au travers de l'exécuteur.
+- Une disposition absente du corpus est restituée comme absence
+  documentaire, jamais comme absence de norme.
+- `tests/boundaries.rs` et `tests/execution.rs` vérifient ces règles.
+
+## 7. Publication Git
 
 - `.gitignore` exclut tout par défaut et n'autorise que des chemins
   nommés. Chaque nouveau type de fichier ou répertoire publié exige
   une entrée explicite.
-- Répertoires de code ouverts : `src/domain/`,
-  `src/infrastructure/`, `tests/common/` (fichiers `.rs`, un niveau).
+- Répertoires de code ouverts : `src/corpus/`, `src/domain/`,
+  `src/execution/`, `src/infrastructure/`, `tests/common/`
+  (fichiers `.rs`, un niveau).
 - Jamais dans Git : corpus non vérifié, bases SQLite et
   sauvegardes, données confidentielles, secrets, artefacts de
   compilation, configuration locale (`.cargo/config.toml`), fichiers

@@ -34,8 +34,12 @@
 # SOUS-MODULES RUST
 # Ouverture ciblee : un seul niveau, fichiers .rs uniquement.
 # Tout nouveau repertoire exige une entree ici et dans docs/ARCHITECTURE.md.
+!/src/corpus/
+!/src/corpus/*.rs
 !/src/domain/
 !/src/domain/*.rs
+!/src/execution/
+!/src/execution/*.rs
 !/src/infrastructure/
 !/src/infrastructure/*.rs
 !/tests/common/
