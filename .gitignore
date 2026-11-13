@@ -1,0 +1,99 @@
+# ============================================================
+# 60_LEGALISTE — DEPOT GITHUB PUBLIC
+# Politique restrictive : exclusion par defaut.
+# ============================================================
+
+# EXCLUSION GENERALE
+/*
+
+# GOUVERNANCE
+!/.gitignore
+!/README.md
+!/AGENTS.md
+!/CLAUDE.md
+
+# REPERTOIRES PUBLICS
+!/sources_publiques/
+!/docs/
+!/src/
+!/tests/
+
+# EXCLUSION DU CONTENU PAR DEFAUT
+/sources_publiques/**
+/docs/**
+/src/**
+/tests/**
+
+# DOCUMENTATION PUBLIQUE
+!/docs/*.md
+
+# CODE SOURCE
+!/src/*.rs
+!/tests/*.rs
+
+# SOUS-MODULES RUST
+# Ouverture ciblee : un seul niveau, fichiers .rs uniquement.
+# Tout nouveau repertoire exige une entree ici et dans docs/ARCHITECTURE.md.
+!/src/domain/
+!/src/domain/*.rs
+!/src/infrastructure/
+!/src/infrastructure/*.rs
+!/tests/common/
+!/tests/common/*.rs
+
+# SOURCES JURIDIQUES
+# Publication uniquement apres verification explicite.
+# Aucune autorisation automatique des PDF, DOCX ou autres pieces.
+
+# SECRETS ET IDENTIFIANTS
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/id_rsa
+**/id_ed25519
+**/*secret*
+**/*credentials*
+**/*token*
+
+# DONNEES CONFIDENTIELLES
+**/dossiers_prives/
+**/donnees_personnelles/
+**/correspondances/
+**/analyses_confidentielles/
+**/confidentiel/
+**/private/
+**/secrets/
+
+# FICHIERS TEMPORAIRES
+**/.DS_Store
+**/._*
+**/*.swp
+**/*.swo
+**/*~
+**/*.tmp
+**/*.bak
+**/*.log
+
+# ARTEFACTS
+**/target/
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/runtime/
+**/cache/
+**/tmp/
+
+# LEGALISTE — manifeste et verrouillage Rust
+!/Cargo.toml
+!/Cargo.lock
+
+# LEGALISTE — migrations SQLite
+!/migrations/
+/migrations/**
+!/migrations/*.sql
