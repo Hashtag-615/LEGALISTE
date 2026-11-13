@@ -14,9 +14,9 @@ n'y est consigné, y compris dans ce document.
 
 | Zone                    | Contenu | Emplacement | Git | Accès du code |
 |-------------------------|---------|-------------|-----|---------------|
-| Code                    | Sources Rust, migrations SQL, documentation, gouvernance. | Dépôt. | Oui, par liste blanche. | Lecture. |
+| Code                    | Sources Rust, définition canonique du schéma SQLite, documentation, gouvernance. | Dépôt. | Oui, par liste blanche. | Lecture. |
 | Corpus public           | Textes officiels acquis, dans leur forme d'origine. | Hors dépôt ; `sources_publiques/` pour les seules pièces dont la publication est vérifiée. | Non, sauf publication vérifiée. | Lecture seule. |
-| Base persistante        | Base SQLite opérationnelle et ses sauvegardes. | Répertoire de données hors dépôt (constante `DATA_DIR`). | Jamais. | Écriture par les seules commandes qui la modifient explicitement. |
+| Base persistante        | Base SQLite opérationnelle et ses sauvegardes. | Répertoire de données hors dépôt (constante `DATA_DIR`). | Jamais. | Écriture par les seules commandes qui la modifient explicitement ; lecture seule pour toute consultation. |
 | Données confidentielles | Coffre chiffré, pièces, dossiers, correspondances, données personnelles. | Hors dépôt. | Jamais. | Aucun. |
 | Artefacts               | Compilation, bases de test temporaires. | Répertoire cible configuré localement ; répertoire temporaire du système. | Jamais. | Écriture. |
 
@@ -27,8 +27,16 @@ n'y est consigné, y compris dans ce document.
   personnelle ni élément de dossier.
 - Toute version enregistrée conserve sa référence de source et sa
   date d'acquisition.
-- Seules `db init`, `db migrate` et les futures commandes
-  d'acquisition y écrivent ; une consultation n'y écrit jamais.
+- Elle est entièrement dérivée des sources et peut être reconstruite
+  à partir d'elles ; une reconstruction conserve les références de
+  source et les dates d'acquisition d'origine.
+- Seules `db init`, qui crée la base selon le schéma canonique, et
+  les futures commandes d'acquisition y écrivent.
+- Une consultation l'ouvre en lecture seule : elle ne crée ni ne
+  modifie la base, son schéma ou ses données.
+- Elle n'est jamais migrée : une base non conforme au schéma
+  canonique est refusée, puis reconstruite sur commande explicite,
+  sans écrasement automatique de l'existant.
 - Ses sauvegardes restent dans le répertoire de données, sous la
   même protection que la base.
 - Son chemin n'est résolu que par la CLI. Les fonctions

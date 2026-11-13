@@ -92,8 +92,3 @@
 # LEGALISTE — manifeste et verrouillage Rust
 !/Cargo.toml
 !/Cargo.lock
-
-# LEGALISTE — migrations SQLite
-!/migrations/
-/migrations/**
-!/migrations/*.sql

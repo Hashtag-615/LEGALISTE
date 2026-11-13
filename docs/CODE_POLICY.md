@@ -17,7 +17,7 @@ Documents associés, dont les règles ne sont pas répétées ici :
 `main.rs` se limite à transmettre les arguments à la CLI et à
 convertir son résultat en sortie d'erreur et code de retour.
 
-Aucune requête SQL, règle juridique ou logique de migration
+Aucune requête SQL, définition de schéma ni règle juridique
 ne doit être placée dans `main.rs`.
 
 `lib.rs` ne contient que des déclarations de modules.
@@ -39,10 +39,8 @@ ne doit être placée dans `main.rs`.
   `common` (sauf `tests/common/`).
 - Noms de fichier proscrits : ceux contenant `token`, `secret` ou
   `credentials`, silencieusement exclus de Git par `.gitignore`.
-- Migrations : `NNN_description.sql`, numéro à trois chiffres,
-  contigu, jamais renommé ; ce numéro est la version du schéma.
 - Tests : le nom énonce le comportement vérifié
-  (`rejects_unknown_version`, `rolls_back_on_sql_error`).
+  (`rejects_reversed_period`, `rolls_back_on_sql_error`).
 
 ## 4. Taille et cohésion
 
@@ -98,30 +96,33 @@ n'est jamais fractionné dans le seul but de passer sous un seuil.
   les clés étrangères avant toute transaction, car
   `PRAGMA foreign_keys` est sans effet à l'intérieur d'une
   transaction, et interrompt le script à la première erreur (`-bail`).
-- L'état initial d'une base, y compris `schema_migrations` et sa
-  version initiale, est défini en un seul endroit, partagé par
-  `db init` et par les fixtures de test.
-- Migrations explicites, versionnées, appliquées en ordre croissant.
-  Aucune migration implicite lors d'une consultation.
-- Une migration publiée n'est jamais modifiée ; toute correction
-  passe par une nouvelle migration.
-- Le changement de schéma et l'enregistrement de sa version forment
-  une seule transaction (`BEGIN IMMEDIATE` … `COMMIT`), exécutée en
-  un seul appel à `sqlite3` : toute erreur laisse la base dans son
-  état antérieur.
+- Le schéma a une seule définition canonique, partagée par
+  `db init` et par les fixtures de test. Aucune autre instruction du
+  crate ne crée ni ne modifie d'objet de schéma.
+- Aucune migration historique : ni script versionné, ni table de
+  versions du schéma, ni mise à niveau sur place. Un changement de
+  schéma modifie la définition canonique ; les bases existantes sont
+  reconstruites depuis les sources (`docs/ARCHITECTURE.md`, D6).
+- Toute ouverture d'une base contrôle la conformité de ses objets à
+  la définition canonique. Une base non conforme est refusée, jamais
+  corrigée ni complétée.
+- Une consultation ouvre la base en lecture seule
+  (`sqlite3 -readonly`) : elle ne crée ni base, ni objet, ni donnée,
+  et n'ajuste jamais le schéma.
+- L'initialisation, comme toute écriture, forme une seule
+  transaction (`BEGIN IMMEDIATE` … `COMMIT`), exécutée en un seul
+  appel à `sqlite3` : toute erreur laisse la base dans son état
+  antérieur.
 - Avant modification d'une base persistante :
   1. contrôle d'intégrité (`PRAGMA integrity_check`) ;
   2. contrôle des clés étrangères (`PRAGMA foreign_key_check`) ;
-  3. contrôle de la suite des versions : refus des versions
-     inconnues, lacunaires ou plus récentes que le programme, et
-     des schémas dont les objets ne correspondent pas à la version
-     enregistrée ;
-  4. contrôle des données que la migration va contraindre ;
+  3. contrôle de conformité au schéma canonique ;
+  4. contrôle des données que l'écriture va contraindre ;
   5. sauvegarde cohérente produite par SQLite, et non par copie de
-     fichier, puis vérifiée ; tout échec interrompt la migration.
+     fichier, puis vérifiée ; tout échec interrompt l'écriture.
 - Après modification : mêmes contrôles et présence des objets
   attendus.
-- Une commande relancée sur une base à jour n'écrit rien.
+- Une commande d'écriture relancée sans donnée nouvelle n'écrit rien.
 - Aucun écrasement automatique de données existantes, d'une base
   ou d'une sauvegarde.
 

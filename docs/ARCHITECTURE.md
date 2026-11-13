@@ -16,14 +16,14 @@
 | Couche           | Responsabilité | Exclu |
 |------------------|----------------|-------|
 | `domain`         | Types et invariants juridiques : sources, textes, dispositions, versions, périodes de validité, provenance, consultation à une date. | Entrées-sorties, SQL, processus, variables d'environnement, horloge système. |
-| `infrastructure` | Exécution de `sqlite3`, schéma, migrations, sauvegardes, fichiers ; conversion entre lignes SQL et types du domaine. | Règles juridiques, présentation, chemins par défaut. |
+| `infrastructure` | Exécution de `sqlite3`, définition canonique du schéma, contrôle de conformité, sauvegardes, fichiers ; conversion entre lignes SQL et types du domaine. | Règles juridiques, présentation, chemins par défaut. |
 | `application`    | Cas d'utilisation combinant domaine et stockage. | SQL, présentation. |
 | `cli`            | Lecture des arguments, choix de la commande, résolution des chemins par défaut, formatage des sorties, conversion des erreurs. | SQL, règles juridiques. |
 | `main.rs`        | Appel de la CLI, écriture de l'erreur, code de retour. | Toute autre logique. |
 
 La couche `application` n'existe pas encore. Les commandes
-d'administration de la base (`db init`, `db status`, `db migrate`)
-ne mobilisent que le stockage : la CLI les adresse directement à
+d'administration de la base (`db init`, `db status`) ne mobilisent
+que le stockage : la CLI les adresse directement à
 `infrastructure`. La couche `application` sera créée avec le premier
 cas d'utilisation combinant domaine et stockage, par exemple la
 consultation d'une disposition à une date.
@@ -58,17 +58,19 @@ réel. Les répertoires utilisent `mod.rs`, comme `tests/common/`.
 src/main.rs                        point d'entrée
 src/lib.rs                         déclaration des modules
 src/cli.rs                         interface opérateur
+src/temporal.rs                    dates civiles et périodes de validité
 src/domain/mod.rs                  types juridiques
-src/domain/temporal.rs             périodes de validité
 src/infrastructure/mod.rs
 src/infrastructure/sqlite.rs       point unique d'exécution de sqlite3
-src/infrastructure/schema.rs       initialisation et état de la base
-src/infrastructure/migrations.rs   contrôle et application des migrations
+src/infrastructure/schema.rs       définition canonique du schéma,
+                                   initialisation, contrôle de conformité
 src/infrastructure/backup.rs       sauvegardes cohérentes
-migrations/NNN_description.sql     scripts de schéma versionnés
 tests/common/mod.rs                fixtures SQLite temporaires
 tests/<capacité>.rs                tests d'intégration
 ```
+
+`src/temporal.rs` relève de la couche `domain` : mêmes
+responsabilités, mêmes exclusions, mêmes dépendances.
 
 Seuls `src/domain/`, `src/infrastructure/` et `tests/common/` sont
 ouverts dans `.gitignore`, sur un niveau et pour les fichiers `.rs`.
@@ -90,12 +92,18 @@ Les noms Rust non encore introduits sont réservés à ces notions.
 
 Une période de validité est un intervalle semi-ouvert : la date de
 début est incluse, la date de fin exclue. `temporal.rs` et les
-déclencheurs de la migration 002 appliquent la même convention.
+contraintes du schéma canonique appliquent la même convention. Ces
+contraintes ne sont jamais plus permissives que la validation du
+domaine : une date impossible (`2025-02-30`) est refusée des deux
+côtés.
 
-Dans le schéma actuel, `retrieved_at` tient lieu de date
-d'acquisition, mais vaut par défaut l'horodatage d'enregistrement,
-qui peut différer de l'acquisition réelle. Les dates de publication
-et de rectification n'y figurent pas encore.
+Le schéma canonique distingue la date d'acquisition réelle de
+l'horodatage d'enregistrement et ne substitue jamais l'un à l'autre
+par défaut. Les dates de publication et de rectification, lorsqu'elles
+sont enregistrées, ont chacune leur champ, nommé d'après leur nature
+(`docs/CODE_POLICY.md`, § 3). Une reconstruction de la base (D6)
+conserve la date d'acquisition de chaque source ; elle ne lui
+substitue jamais la date de reconstruction.
 
 ## 6. Décisions
 
@@ -111,6 +119,16 @@ et de rectification n'y figurent pas encore.
   bibliothèque de dates.
 - **D5 — Compilation hors dépôt.** Le répertoire cible est fixé
   localement par `.cargo/config.toml`, non versionné.
+- **D6 — Schéma canonique, sans migration.** Arrêtée le 2026-11-13.
+  La base persistante est une production dérivée des sources
+  officielles. Son schéma a une seule définition canonique (§ 4) ;
+  il n'existe ni script de migration, ni table de versions du
+  schéma, ni mise à niveau sur place. Modifier le schéma, c'est
+  modifier cette définition ; une base qui ne s'y conforme pas est
+  refusée, puis reconstruite depuis les sources sur commande
+  explicite. Aucune consultation ne modifie la base. Conséquence :
+  la base ne contient rien qui ne puisse être reconstruit depuis les
+  sources (`docs/DATA_BOUNDARIES.md`, § 3).
 
 ## 7. Écarts constatés le 2026-11-13
 
@@ -118,18 +136,11 @@ et de rectification n'y figurent pas encore.
 de cette liste.
 
 - `main.rs` contient la lecture des commandes, l'exécution de
-  `sqlite3` et le SQL d'initialisation.
-- Deux fonctions exécutent `sqlite3` avec des comportements
-  différents (passage du SQL, activation des clés étrangères,
-  traitement de la sortie).
-- `schema_migrations` est créée hors des migrations versionnées,
-  ce qui fait échouer les deux tests SQLite qui ne rejouent que
-  `001_initial.sql`.
-- Les tests d'intégration SQLite résident dans `src/migrations.rs`.
+  `sqlite3` et le SQL de contrôle de `db status`.
+- La définition canonique du schéma n'existe pas encore ; `db init`
+  est retiré jusqu'à son introduction.
+- `db status` ouvre la base en lecture-écriture, sans `-readonly`.
+- `db status` réussit malgré une violation de clé étrangère.
+- Aucun test ne couvre `db status` ni l'exécution de `sqlite3`.
 - `ValidityPeriod` expose ses champs, ce qui permet de contourner
   sa validation.
-- La contrainte SQL `GLOB` accepte des dates impossibles
-  (`2025-02-30`) que le domaine refuse.
-- `db status` réussit malgré une violation de clé étrangère.
-- La migration 002 ne contrôle pas les chevauchements antérieurs
-  à l'installation de ses déclencheurs.
