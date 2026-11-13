@@ -113,8 +113,14 @@ n'est jamais fractionné dans le seul but de passer sous un seuil.
   la définition canonique. Une base non conforme est refusée, jamais
   corrigée ni complétée.
 - Une consultation ouvre la base en lecture seule
-  (`sqlite3 -readonly`) : elle ne crée ni base, ni objet, ni donnée,
-  et n'ajuste jamais le schéma.
+  (`sqlite3 -readonly -safe`) : elle ne crée ni base, ni objet, ni
+  donnée, et n'ajuste jamais le schéma.
+- Une base est construite en entier dans un fichier provisoire,
+  contrôlée, relue, puis publiée par lien physique sous son nom
+  (`docs/ARCHITECTURE.md`, D11) : jamais d'écrasement, jamais de base
+  incomplète sous son nom définitif.
+- Les résultats de `sqlite3` sont lus au format `quote` ; tout texte
+  à caractère de contrôle est refusé à l'écriture.
 - L'initialisation, comme toute écriture, forme une seule
   transaction (`BEGIN IMMEDIATE` … `COMMIT`), exécutée en un seul
   appel à `sqlite3` : toute erreur laisse la base dans son état

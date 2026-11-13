@@ -87,7 +87,9 @@ src/infrastructure/legi_archive.rs lecture de l'archive LEGI (tar),
                                    empreintes (shasum), provenance
 src/infrastructure/sqlite.rs       point unique d'exécution de sqlite3
 src/infrastructure/schema.rs       définition canonique du schéma,
-                                   initialisation, contrôle de conformité
+                                   contrôle de conformité
+src/infrastructure/legi_store.rs   import atomique et relecture d'un
+                                   texte LEGI
 src/infrastructure/backup.rs       sauvegardes cohérentes
 tests/common/mod.rs                fixtures partagées des tests
 tests/common/legi_extracts.rs      extraits LEGI authentiques
@@ -109,18 +111,17 @@ Les noms Rust non encore introduits sont réservés à ces notions.
 
 | Notion                    | Rust               | SQL                         |
 |---------------------------|--------------------|-----------------------------|
-| Source juridique          | `LegalSource`      | `legal_sources`             |
+| Source officielle capturée| `SourceRecord`     | `source_records` ; date d'acquisition dans `ingestion_events` |
 | Texte                     | `LegalText`        | `legal_texts`               |
-| Disposition               | `Provision`        | `provisions`                |
+| Disposition               | `Provision`        | `provisions` (clé : plus petit identifiant de version) |
 | Version d'une disposition | `ProvisionVersion` | `provision_versions`        |
-| Période de validité       | `ValidityPeriod`   | `valid_from`, `valid_until` |
+| Période de validité       | `ValidityPeriod`   | `valid_from`, `valid_until`, dates telles que publiées |
 | Événement d'acquisition   | `IngestionEvent`   | `ingestion_events`          |
-| Date civile               | `CivilDate`        | à définir                   |
-| Identifiant officiel LEGI | `LegiId`           | à définir                   |
-| État officiel LEGI        | `LegiStatus`       | à définir                   |
+| Date civile               | `CivilDate`        | `TEXT` `AAAA-MM-JJ`, contrôlée |
+| Identifiant officiel LEGI | `LegiId`           | `TEXT`, préfixe et douze chiffres contrôlés |
+| État officiel LEGI        | `LegiStatus`       | `status`, onze valeurs ou vide |
 | Résolution à une date     | `Resolution`       | aucun : calculée            |
 | Anomalie temporelle       | `TemporalAnomaly`  | aucun : calculée            |
-| Source officielle capturée| `SourceRecord`     | à définir                   |
 | Corpus officiel           | `Corpus`           | aucun : en mémoire          |
 | Scénario                  | `Scenario`         | aucun : éphémère            |
 | Fait daté et son statut   | `DatedFact`, `FactStatus` | aucun : éphémère     |
@@ -246,16 +247,31 @@ substitue jamais la date de reconstruction.
   parcourt l'archive entière (environ une minute) ; GNU tar, qui
   ignore `--include`, n'est pas pris en charge ; tout document
   divergent arrête la lecture.
+- **D11 — Base SQLite construite en entier, publiée par lien.**
+  Arrêtée le 2026-11-13, en application de D6. Un import crée une
+  base neuve : schéma canonique et données en une transaction, dans
+  `<base>.partial` ; la base est contrôlée (intégrité, clés étrangères,
+  conformité), relue et comparée à l'extrait, puis publiée par lien
+  physique, qui échoue si le nom existe. Aucune base existante n'est
+  remplacée ; aucune base incomplète n'apparaît sous son nom. Les
+  dates sont conservées telles que publiées ; aucune contrainte
+  n'ordonne début et fin. La base ne porte aucun horodatage
+  d'exécution : deux imports d'une même source ont le même contenu
+  logique. Toute consultation passe par `sqlite3 -readonly -safe`,
+  après contrôle ; résolution et anomalies restent au domaine.
 
 ## 7. Écarts constatés le 2026-11-13
 
 À résorber au fil des chantiers ; chaque écart corrigé est retiré
 de cette liste.
 
-- `main.rs` contient la lecture des commandes, l'exécution de
-  `sqlite3` et le SQL de contrôle de `db status`.
-- La définition canonique du schéma n'existe pas encore ; `db init`
-  est retiré jusqu'à son introduction.
-- `db status` ouvre la base en lecture-écriture, sans `-readonly`.
-- `db status` réussit malgré une violation de clé étrangère.
-- Aucun test ne couvre `db status` ni l'exécution de `sqlite3`.
+- `main.rs` réunit encore la lecture des commandes et le chemin par
+  défaut de la base ; aucun module `cli` n'existe.
+- L'import et `db init` ne sont exposés par aucune commande : la
+  création d'une base n'est possible que depuis la bibliothèque.
+- La CLI elle-même n'est couverte par aucun test ; le contrôle
+  qu'elle appelle (`schema::check`) l'est.
+- La base persistante désignée par `DATA_DIR` est absente ;
+  `DATA/legaliste.sqlite3`, hors de ce chemin, porte un schéma
+  antérieur à D6 (`schema_migrations`) et serait refusée comme non
+  conforme.

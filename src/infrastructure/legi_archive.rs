@@ -10,13 +10,13 @@
 use std::error::Error;
 use std::ffi::OsString;
 use std::fmt;
-use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Output};
 
 use crate::corpus::SourceRecord;
 use crate::corpus::legi_text::{self, ExtractError, TextExtract};
 use crate::domain::legi::LegiId;
+use crate::infrastructure::ProcessError;
 
 /// Vérifie la provenance de l'archive, puis construit le corpus du
 /// texte `text` (identifiant de dossier : CID du texte).
@@ -54,18 +54,18 @@ pub fn verify_provenance(archive: &Path, source: &SourceRecord) -> Result<(), Ar
 
 /// Documents d'article du texte, concaténés dans l'ordre de l'archive.
 pub fn read_text_articles(archive: &Path, text: LegiId) -> Result<String, ArchiveError> {
-    let output = run(Command::new("tar").args(tar_arguments(archive, text)), None)?;
+    let output = super::run(Command::new("tar").args(tar_arguments(archive, text)), None)?;
     String::from_utf8(output.stdout).map_err(|_| ArchiveError::NotUtf8)
 }
 
 pub fn sha256_file(path: &Path) -> Result<String, ArchiveError> {
     let mut command = Command::new("shasum");
     command.args(["-a", "256", "--"]).arg(path);
-    digest(run(&mut command, None)?)
+    digest(super::run(&mut command, None)?)
 }
 
 pub fn sha256_bytes(bytes: &[u8]) -> Result<String, ArchiveError> {
-    digest(run(
+    digest(super::run(
         Command::new("shasum").args(["-a", "256"]),
         Some(bytes),
     )?)
@@ -85,41 +85,6 @@ fn tar_arguments(archive: &Path, text: LegiId) -> Vec<OsString> {
     ]
 }
 
-fn run(command: &mut Command, input: Option<&[u8]>) -> Result<Output, ArchiveError> {
-    let program = command.get_program().to_string_lossy().into_owned();
-    let spawn_error = |error: std::io::Error| ArchiveError::Spawn {
-        program: program.clone(),
-        message: error.to_string(),
-    };
-
-    let mut child = command
-        .stdin(if input.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(spawn_error)?;
-
-    if let (Some(bytes), Some(mut stdin)) = (input, child.stdin.take()) {
-        // L'entrée est écrite en entier puis fermée avant toute lecture :
-        // `shasum` ne produit sa sortie qu'en fin d'entrée.
-        stdin.write_all(bytes).map_err(spawn_error)?;
-    }
-
-    let output = child.wait_with_output().map_err(spawn_error)?;
-    if !output.status.success() {
-        return Err(ArchiveError::Failed {
-            program,
-            status: output.status.code(),
-            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
-    }
-    Ok(output)
-}
-
 fn digest(output: Output) -> Result<String, ArchiveError> {
     let text = String::from_utf8_lossy(&output.stdout);
     let digest = text.split_whitespace().next().unwrap_or_default();
@@ -134,39 +99,18 @@ fn digest(output: Output) -> Result<String, ArchiveError> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArchiveError {
-    Spawn {
-        program: String,
-        message: String,
-    },
-    Failed {
-        program: String,
-        status: Option<i32>,
-        stderr: String,
-    },
+    Process(ProcessError),
     NotUtf8,
     UnexpectedDigest(String),
-    NameMismatch {
-        expected: String,
-        found: String,
-    },
-    DigestMismatch {
-        expected: String,
-        found: String,
-    },
+    NameMismatch { expected: String, found: String },
+    DigestMismatch { expected: String, found: String },
     Extract(ExtractError),
 }
 
 impl fmt::Display for ArchiveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Spawn { program, message } => {
-                write!(f, "Impossible d'exécuter {program} : {message}")
-            }
-            Self::Failed {
-                program,
-                status,
-                stderr,
-            } => write!(f, "{program} a échoué ({status:?}) : {stderr}"),
+            Self::Process(error) => error.fmt(f),
             Self::NotUtf8 => f.write_str("Documents de l'archive non conformes à UTF-8"),
             Self::UnexpectedDigest(text) => write!(f, "Empreinte illisible : {text}"),
             Self::NameMismatch { expected, found } => {
@@ -183,9 +127,16 @@ impl fmt::Display for ArchiveError {
 impl Error for ArchiveError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Process(error) => Some(error),
             Self::Extract(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl From<ProcessError> for ArchiveError {
+    fn from(error: ProcessError) -> Self {
+        Self::Process(error)
     }
 }
 
@@ -225,6 +176,9 @@ mod tests {
         let text = "LEGITEXT000006070721".parse().unwrap();
         let error = read_text_articles(Path::new("absente.tar.gz"), text).unwrap_err();
 
-        assert!(matches!(error, ArchiveError::Failed { ref program, .. } if program == "tar"));
+        assert!(matches!(
+            error,
+            ArchiveError::Process(ProcessError::Failed { ref program, .. }) if program == "tar"
+        ));
     }
 }

@@ -23,10 +23,15 @@ const EXECUTION: [&str; 3] = [
     include_str!("../src/execution/tool.rs"),
     include_str!("../src/execution/skill.rs"),
 ];
-const INFRASTRUCTURE: [&str; 2] = [
+/// Ordre : processus, archive, sqlite3, schéma, import.
+const INFRASTRUCTURE: [&str; 5] = [
     include_str!("../src/infrastructure/mod.rs"),
     include_str!("../src/infrastructure/legi_archive.rs"),
+    include_str!("../src/infrastructure/sqlite.rs"),
+    include_str!("../src/infrastructure/schema.rs"),
+    include_str!("../src/infrastructure/legi_store.rs"),
 ];
+const MAIN: &str = include_str!("../src/main.rs");
 
 /// Sources sans entrée-sortie : tout sauf `infrastructure`.
 fn pure_sources() -> Vec<&'static str> {
@@ -63,9 +68,45 @@ fn only_infrastructure_has_external_effects() {
             "Instant::",
         ],
     );
+    assert_absent(&INFRASTRUCTURE, &["std::net"]);
+}
+
+/// Seul l'import écrit sur disque, et uniquement dans un fichier neuf ;
+/// l'archive n'est jamais ouverte en écriture.
+#[test]
+fn only_the_import_writes_files() {
+    let writes = [
+        "File::create",
+        "OpenOptions",
+        "fs::write",
+        "hard_link",
+        "remove_file",
+    ];
+    assert_absent(&INFRASTRUCTURE[..4], &writes);
+    assert_absent(&[MAIN], &writes);
+    assert!(INFRASTRUCTURE[4].contains("File::create_new"));
+}
+
+/// Un seul point d'exécution de `sqlite3` dans le crate, aucun SQL ni
+/// processus dans `main.rs` (CODE_POLICY, § 2 et § 7).
+#[test]
+fn single_sqlite3_execution_point() {
+    let mut sources = pure_sources();
+    sources.extend(INFRASTRUCTURE);
+    sources.push(MAIN);
+    let launches = |program: &str| {
+        let call = format!("Command::new(\"{program}\")");
+        sources
+            .iter()
+            .map(|s| s.matches(&call).count())
+            .sum::<usize>()
+    };
+
+    assert_eq!(launches("sqlite3"), 1);
+    assert!(INFRASTRUCTURE[2].contains("Command::new(\"sqlite3\")"));
     assert_absent(
-        &INFRASTRUCTURE,
-        &["std::net", "File::create", "OpenOptions"],
+        &[MAIN],
+        &["Command", "PRAGMA", "SELECT", "std::process::Command"],
     );
 }
 

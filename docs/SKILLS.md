@@ -40,7 +40,8 @@ Déclaration : `TEMPORAL_RESOLUTION` ; exécution :
 `resolve_temporally` (`src/execution/skill.rs`) ; tests :
 `tests/execution.rs`, `tests/legi_extracts.rs` (documents
 authentiques) et `tests/legi_archive.rs` (Code civil lu dans
-l'archive de référence).
+l'archive de référence, puis relu dans une base SQLite canonique : mêmes
+rapports).
 
 Il identifie, selon la source consultée, la version d'une disposition
 en vigueur à la date d'une situation. Outils : état du corpus,

@@ -9,24 +9,33 @@ mod common;
 
 use std::fs;
 use std::path::PathBuf;
+use std::slice;
 use std::sync::OnceLock;
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use common::legi_extracts::EXTRACTS;
 use common::{
-    ARCHIVE, ARCHIVE_SHA256, ARTICLE_16_11, CODE_CIVIL, FOREIGN_ARTICLE, date, id, legi_source,
-    provision,
+    ARCHIVE, ARCHIVE_SHA256, ARTICLE_16_11, CODE_CIVIL, FOREIGN_ARTICLE, Scratch, date, id,
+    legi_source, provision,
 };
+use legaliste::corpus::Corpus;
 use legaliste::corpus::legi_text::{self, TextExtract};
 use legaliste::domain::anomaly::{self, TemporalAnomaly};
 use legaliste::domain::legi::LegiId;
 use legaliste::execution::skill::{self, Reservation, TemporalResolutionReport};
 use legaliste::execution::tool::ResolutionOutcome;
-use legaliste::infrastructure::legi_archive;
+use legaliste::infrastructure::{legi_archive, legi_store};
 use legaliste::simulation::{DatedFact, FactStatus, Scenario};
+
+/// Empreinte du contenu logique de la base du Code civil, mesurée le
+/// 2026-11-13 : toute lecture et tout import de la même archive doivent
+/// la reproduire.
+const CODE_CIVIL_CONTENT_SHA256: &str =
+    "6f486ca619340110a48423062dcbe0d9c3c5e7a9add6990032572a498cf26542";
 
 struct Reading {
     extract: TextExtract,
+    duration: Duration,
     length: u64,
     modified: SystemTime,
 }
@@ -47,8 +56,11 @@ fn reading() -> &'static Reading {
                 path.display()
             )
         });
+        let started = Instant::now();
+        let extract = legi_archive::load_text(&path, legi_source(), id(CODE_CIVIL)).unwrap();
         Reading {
-            extract: legi_archive::load_text(&path, legi_source(), id(CODE_CIVIL)).unwrap(),
+            extract,
+            duration: started.elapsed(),
             length: metadata.len(),
             modified: metadata.modified().unwrap(),
         }
@@ -56,9 +68,18 @@ fn reading() -> &'static Reading {
 }
 
 fn report(article: &str, situation: &str, status: FactStatus) -> TemporalResolutionReport {
+    report_on(reading().extract.corpus(), article, situation, status)
+}
+
+fn report_on(
+    corpus: &Corpus,
+    article: &str,
+    situation: &str,
+    status: FactStatus,
+) -> TemporalResolutionReport {
     let fact = DatedFact::new("Situation synthétique", date(situation), status).unwrap();
     let scenario = Scenario::new("Code civil, archive LEGI", id(article), fact).unwrap();
-    skill::resolve_temporally(&scenario, reading().extract.corpus()).unwrap()
+    skill::resolve_temporally(&scenario, corpus).unwrap()
 }
 
 fn in_force(report: &TemporalResolutionReport) -> Option<LegiId> {
@@ -154,35 +175,8 @@ fn distinguishes_absence_and_concurrence_in_the_real_corpus() {
 /// l'analyse indépendante de l'archive.
 #[test]
 fn anomaly_counts_match_independent_scan() {
-    let corpus = reading().extract.corpus();
-    let source_date = corpus.source().state_date();
-    let (mut inverted, mut overlapping, mut gaps, mut conflicts, mut missing) = (0, 0, 0, 0, 0);
-
-    for provision in corpus.provisions() {
-        let anomalies = anomaly::detect(provision, source_date);
-        inverted += count(&anomalies, |a| {
-            matches!(a, TemporalAnomaly::InvertedPeriod(_))
-        });
-        gaps += count(&anomalies, |a| matches!(a, TemporalAnomaly::Gap { .. }));
-        conflicts += count(&anomalies, |a| {
-            matches!(a, TemporalAnomaly::StatusConflict { .. })
-        });
-        missing += count(&anomalies, |a| {
-            matches!(a, TemporalAnomaly::MissingStatus(_))
-        });
-        if anomalies
-            .iter()
-            .any(|a| matches!(a, TemporalAnomaly::Overlap { .. }))
-        {
-            overlapping += 1;
-        }
-    }
-    let empty = corpus
-        .provisions()
-        .iter()
-        .flat_map(|p| p.versions())
-        .filter(|v| v.period().is_empty() && !v.period().is_inverted())
-        .count();
+    let counts = anomaly_counts(reading().extract.corpus());
+    let [inverted, empty, overlapping, gaps, conflicts, missing] = counts;
 
     eprintln!(
         "Code civil : {inverted} périodes inversées, {empty} vides, {overlapping} dispositions \
@@ -191,8 +185,101 @@ fn anomaly_counts_match_independent_scan() {
     assert_eq!((inverted, empty, overlapping), (37, 1, 22));
 }
 
-fn count(anomalies: &[TemporalAnomaly], predicate: impl Fn(&TemporalAnomaly) -> bool) -> usize {
-    anomalies.iter().filter(|a| predicate(a)).count()
+/// Périodes inversées, périodes vides, dispositions à chevauchement,
+/// lacunes, conflits d'état, états absents.
+fn anomaly_counts(corpus: &Corpus) -> [usize; 6] {
+    let source_date = corpus.source().state_date();
+    let mut counts = [0; 6];
+
+    for provision in corpus.provisions() {
+        let anomalies = anomaly::detect(provision, source_date);
+        let count = |predicate: fn(&TemporalAnomaly) -> bool| {
+            anomalies.iter().filter(|a| predicate(a)).count()
+        };
+        counts[0] += count(|a| matches!(a, TemporalAnomaly::InvertedPeriod(_)));
+        counts[2] += usize::from(count(|a| matches!(a, TemporalAnomaly::Overlap { .. })) > 0);
+        counts[3] += count(|a| matches!(a, TemporalAnomaly::Gap { .. }));
+        counts[4] += count(|a| matches!(a, TemporalAnomaly::StatusConflict { .. }));
+        counts[5] += count(|a| matches!(a, TemporalAnomaly::MissingStatus(_)));
+    }
+    counts[1] = corpus
+        .provisions()
+        .iter()
+        .flat_map(|p| p.versions())
+        .filter(|v| v.period().is_empty() && !v.period().is_inverted())
+        .count();
+    counts
+}
+
+/// Base SQLite bâtie depuis la lecture réelle : deux imports
+/// indépendants, relecture en lecture seule, comparaison avec la
+/// lecture directe de l'archive, temps mesurés.
+#[test]
+fn code_civil_through_sqlite() {
+    let reading = reading();
+    let scratch = Scratch::new("code-civil");
+    let first = scratch.file("premier.sqlite3");
+    let second = scratch.file("second.sqlite3");
+
+    let started = Instant::now();
+    legi_store::import(&first, slice::from_ref(&reading.extract)).unwrap();
+    let import = started.elapsed();
+    legi_store::import(&second, slice::from_ref(&reading.extract)).unwrap();
+
+    let content = legi_store::logical_content(&first).unwrap();
+    assert_eq!(content, legi_store::logical_content(&second).unwrap());
+    let digest = legi_archive::sha256_bytes(content.as_bytes()).unwrap();
+
+    let file_digest = legi_archive::sha256_file(&first).unwrap();
+    let started = Instant::now();
+    let stored = legi_store::load_text(&first, id(CODE_CIVIL)).unwrap();
+    let load = started.elapsed();
+    assert_eq!(stored, reading.extract);
+    assert_eq!(
+        anomaly_counts(stored.corpus()),
+        anomaly_counts(reading.extract.corpus())
+    );
+
+    let dates = [
+        "1994-07-29",
+        "2006-01-01",
+        "2010-06-15",
+        "2023-05-20",
+        "2023-05-21",
+        "2026-11-13",
+    ];
+    let started = Instant::now();
+    let from_store: Vec<_> = dates
+        .iter()
+        .map(|d| {
+            report_on(
+                stored.corpus(),
+                "LEGIARTI000047569313",
+                d,
+                FactStatus::Established,
+            )
+        })
+        .collect();
+    let resolve = started.elapsed() / dates.len() as u32;
+    for (report, situation) in from_store.iter().zip(dates) {
+        assert_eq!(
+            report,
+            &self::report("LEGIARTI000047569313", situation, FactStatus::Established)
+        );
+    }
+    assert_eq!(legi_archive::sha256_file(&first).unwrap(), file_digest);
+
+    eprintln!(
+        "Code civil, temps mesurés : lecture de l'archive {:.1} s ; import SQLite {:.2} s ; \
+         consultation (contrôles et relecture) {} ms ; résolution {} µs ; base {} octets ; \
+         contenu logique {digest}",
+        reading.duration.as_secs_f64(),
+        import.as_secs_f64(),
+        load.as_millis(),
+        resolve.as_micros(),
+        fs::metadata(&first).unwrap().len()
+    );
+    assert_eq!(digest, CODE_CIVIL_CONTENT_SHA256);
 }
 
 #[test]

@@ -32,7 +32,9 @@ n'y est consigné, y compris dans ce document.
   à partir d'elles ; une reconstruction conserve les références de
   source et les dates d'acquisition d'origine.
 - Seules `db init`, qui crée la base selon le schéma canonique, et
-  les futures commandes d'acquisition y écrivent.
+  les futures commandes d'acquisition y écrivent. L'import de la
+  bibliothèque ne crée qu'une base neuve ; il n'est appliqué à la base
+  persistante que sur mandat explicite.
 - Une consultation l'ouvre en lecture seule : elle ne crée ni ne
   modifie la base, son schéma ou ses données.
 - Elle n'est jamais migrée : une base non conforme au schéma

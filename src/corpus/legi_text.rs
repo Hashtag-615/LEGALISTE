@@ -43,6 +43,37 @@ impl TextExtract {
     pub fn versions_without_document(&self) -> &[LegiId] {
         &self.versions_without_document
     }
+
+    /// Recompose un extrait conservé hors de l'archive (base SQLite),
+    /// sous les invariants de `build` : chaque version du corpus a son
+    /// document ou figure, une seule fois, parmi les versions sans
+    /// document.
+    pub fn from_parts(
+        corpus: Corpus,
+        text: LegiId,
+        document_count: usize,
+        versions_without_document: Vec<LegiId>,
+    ) -> Result<Self, ExtractError> {
+        if !matches!(text.kind(), LegiIdKind::Text | LegiIdKind::JorfText) {
+            return Err(ExtractError::NotAText(text));
+        }
+        let sorted = versions_without_document.windows(2).all(|w| w[0] < w[1]);
+        let known = versions_without_document
+            .iter()
+            .all(|id| corpus.provision(*id).is_some());
+        let counted =
+            document_count + versions_without_document.len() == corpus.state().version_count();
+        if document_count == 0 || !sorted || !known || !counted {
+            return Err(ExtractError::InconsistentParts(text));
+        }
+
+        Ok(Self {
+            corpus,
+            text,
+            document_count,
+            versions_without_document,
+        })
+    }
 }
 
 /// `stream` : documents d'article concaténés, tels que `tar` les livre.
@@ -189,6 +220,7 @@ pub enum ExtractError {
     NotInOwnVersions(LegiId),
     MetadataDiffersFromList(LegiId),
     DivergentVersionLists(LegiId),
+    InconsistentParts(LegiId),
     Legi(LegiError),
     Provision(ProvisionError),
     Corpus(CorpusError),
@@ -214,6 +246,9 @@ impl fmt::Display for ExtractError {
             Self::NotInOwnVersions(id) => write!(f, "{id} absent de sa propre liste VERSIONS"),
             Self::MetadataDiffersFromList(id) => {
                 write!(f, "{id} : META_ARTICLE diffère de son entrée LIEN_ART")
+            }
+            Self::InconsistentParts(id) => {
+                write!(f, "{id} : extrait recomposé incohérent")
             }
             Self::DivergentVersionLists(id) => {
                 write!(

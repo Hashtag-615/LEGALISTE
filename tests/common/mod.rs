@@ -11,6 +11,11 @@
 
 pub mod legi_extracts;
 
+use std::fs;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use legaliste::corpus::legi_text::{self, TextExtract};
 use legaliste::corpus::{Corpus, SourceRecord};
 use legaliste::domain::legi::{self, LegiId, LegiStatus};
 use legaliste::domain::provision::{Provision, ProvisionVersion};
@@ -114,4 +119,46 @@ pub fn legi_source() -> SourceRecord {
 /// Corpus réduit à l'article 16-11, lu dans l'ordre donné.
 pub fn corpus(records: impl IntoIterator<Item = Record>) -> Corpus {
     Corpus::new(legi_source(), vec![provision(records)]).unwrap()
+}
+
+/// Code civil réduit aux dix extraits authentiques.
+pub fn extracts_text() -> TextExtract {
+    let stream: String = legi_extracts::EXTRACTS.iter().map(|e| e.xml).collect();
+    legi_text::build(legi_source(), id(CODE_CIVIL), &stream).unwrap()
+}
+
+/// Répertoire de test unique, sous le répertoire temporaire du système,
+/// supprimé à la fin du test, même en cas d'échec (DATA_BOUNDARIES, § 5).
+pub struct Scratch {
+    directory: PathBuf,
+}
+
+impl Scratch {
+    pub fn new(label: &str) -> Self {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let directory = std::env::temp_dir().join(format!(
+            "legaliste-test-{}-{}-{label}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&directory).unwrap();
+        Self { directory }
+    }
+
+    /// Fichier du répertoire : un nom simple, jamais un chemin.
+    pub fn file(&self, name: &str) -> PathBuf {
+        assert!(
+            !name.contains('/') && !name.contains(".."),
+            "nom refusé : {name}"
+        );
+        self.directory.join(name)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        // Motif : un répertoire temporaire non supprimé reste confiné au
+        // répertoire temporaire du système ; l'échec est sans conséquence.
+        let _ = fs::remove_dir_all(&self.directory);
+    }
 }

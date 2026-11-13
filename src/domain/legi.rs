@@ -102,7 +102,8 @@ pub enum LegiStatus {
 }
 
 impl LegiStatus {
-    const ALL: [Self; 11] = [
+    /// Vocabulaire complet, constaté dans l'archive.
+    pub const ALL: [Self; 11] = [
         Self::Vigueur,
         Self::VigueurDiff,
         Self::Modifie,
@@ -175,6 +176,15 @@ pub fn validity_period(start: &str, end: &str) -> Result<ValidityPeriod, LegiErr
         start,
         if open { None } else { Some(end) },
     ))
+}
+
+/// Inverse exact de `validity_period` : `DATE_DEBUT` et `DATE_FIN` tels
+/// que publiés, sentinelle comprise.
+pub fn published_bounds(period: ValidityPeriod) -> (String, String) {
+    let end = period
+        .end()
+        .map_or_else(|| OPEN_END.to_string(), |end| end.to_string());
+    (period.start().to_string(), end)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -317,5 +327,22 @@ mod tests {
             Some(OPEN_END)
         );
         assert!(period.is_empty());
+    }
+
+    #[test]
+    fn published_bounds_restore_the_published_dates() {
+        for (start, end) in [
+            ("2023-05-21", OPEN_END),
+            ("1994-03-01", "1993-09-02"),
+            ("1976-07-01", "1976-07-01"),
+            (OPEN_END, OPEN_END),
+            ("2020-01-01", "2222-02-22"),
+        ] {
+            let period = validity_period(start, end).unwrap();
+            assert_eq!(
+                published_bounds(period),
+                (start.to_string(), end.to_string())
+            );
+        }
     }
 }
